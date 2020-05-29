@@ -1,0 +1,270 @@
+Parameters:
+  CustomName:
+    Description: Custom name to be associated with Resources. Lower case.
+    Type: String
+  Region:
+    Description: Region
+    Type: String
+    Default: sa-east-1
+    AllowedValues:
+      - sa-east-1
+      - us-east-1
+      
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: 
+        - Key: Name
+          Value: !Sub "vpc-${CustomName}"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: 
+      Tags: 
+        - Key: Name
+          Value: !Sub "igw-${CustomName}"
+  
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags: 
+        - Key: Name
+          Value: !Sub "rtb-dmz"
+
+  IGWRoute:
+    Type: AWS::EC2::Route
+    Properties: 
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+
+ #Public Subnets
+
+  SubnetDMZA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/22
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Sub "${Region}a"
+      Tags:
+      - Key: Name
+        Value: !Sub "dmz-a"
+
+  SubnetDMZB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.4.0/22
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Sub "${Region}b"
+      Tags:
+      - Key: Name
+        Value: !Sub "dmz-b"
+        
+  SubnetDMZC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.8.0/22
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Sub "${Region}c"
+      Tags:
+      - Key: Name
+        Value: !Sub "dmz-c"
+
+  SubnetDMZARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref SubnetDMZA
+
+  SubnetDMZBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref SubnetDMZB
+
+  SubnetDMZCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref SubnetDMZC
+
+
+ #Private Subnets
+
+  ElasticIPA:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  ElasticIPB:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  ElasticIPC:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIPA.AllocationId
+      SubnetId: !Ref SubnetDMZA
+
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIPB.AllocationId
+      SubnetId: !Ref SubnetDMZB
+
+  NatGatewayC:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIPC.AllocationId
+      SubnetId: !Ref SubnetDMZC
+
+  SubnetAPPA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.12.0/22
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Sub "${Region}a"
+      Tags:
+      - Key: Name
+        Value: !Sub "app-a"
+
+  SubnetAPPB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.16.0/22
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Sub "${Region}b"
+      Tags:
+      - Key: Name
+        Value: !Sub "app-b"
+
+  SubnetAPPC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.20.0/22
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Sub "${Region}c"
+      Tags:
+      - Key: Name
+        Value: !Sub "app-c"
+
+  PrivateRouteTableAppA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "rtb-app-a"
+
+  PrivateRouteTableAppB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "rtb-app-b"
+
+  PrivateRouteTableAppC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "rtb-app-c"
+
+  RouteNatGatewayAppA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableAppA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+
+  RouteNatGatewayAppB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableAppB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayB
+
+  RouteNatGatewayAppC:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableAppC
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayC
+
+  SubnetAPPARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableAppA
+      SubnetId: !Ref SubnetAPPA
+
+  SubnetAPPBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableAppB
+      SubnetId: !Ref SubnetAPPB
+
+  SubnetAPPCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableAppC
+      SubnetId: !Ref SubnetAPPC
+
+
+Outputs:
+  VpcId:
+    Value: !Ref VPC
+    Export:
+      Name: VpcId
+  SubnetAPPA:
+    Value: !Ref SubnetAPPA
+    Export:
+      Name: SubnetAPPA
+  SubnetAPPB:
+    Value: !Ref SubnetAPPB
+    Export:
+      Name: SubnetAPPB
+  SubnetAPPC:
+    Value: !Ref SubnetAPPC
+    Export:
+      Name: SubnetAPPC
+  SubnetDMZA:
+    Value: !Ref SubnetDMZA
+    Export:
+      Name: SubnetDMZA
+  SubnetDMZB:
+    Value: !Ref SubnetDMZB
+    Export:
+      Name: SubnetDMZB
+  SubnetDMZC:
+    Value: !Ref SubnetDMZC
+    Export:
+      Name: SubnetDMZC

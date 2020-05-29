@@ -1,0 +1,10 @@
+[
+    {
+      "ParameterKey": "CustomName",
+      "ParameterValue": "myOrg"
+    }, 
+    {
+      "ParameterKey": "Region",
+      "ParameterValue": "sa-east-1"
+    }
+]
